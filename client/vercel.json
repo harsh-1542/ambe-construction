@@ -1,6 +1,6 @@
 {
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://ambe-api-xxxx.onrender.com/api/:path*" },
+    { "source": "/api/:path*", "destination": "https://ambe-construction.onrender.com" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }
