@@ -1,24 +1,37 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { post, ApiError } from "../lib/api";
+import { get, post, ApiError } from "../lib/api";
 import { Button, ErrorNote, Field, Input } from "../components/ui";
 import { useAuth } from "../state/AuthContext";
 
 export default function Login() {
+  const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
+  const [checkingSetup, setCheckingSetup] = useState(true);
+  const [needsSetup, setNeedsSetup] = useState(false);
   const { refresh } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    get<{ needsSetup: boolean }>("/api/auth/status")
+      .then((status) => setNeedsSetup(status.needsSetup))
+      .catch(() => setErr("Could not check account setup. Please refresh and try again."))
+      .finally(() => setCheckingSetup(false));
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr("");
     setLoading(true);
     try {
-      const me = await post<any>("/api/auth/login", { username, password });
+      const me = await post<{ needsSetupWizard: boolean }>(
+        needsSetup ? "/api/auth/setup" : "/api/auth/login",
+        needsSetup ? { name, username, password } : { username, password }
+      );
       await refresh();
       navigate(me.needsSetupWizard ? "/setup" : (location.state as any)?.from || "/", { replace: true });
     } catch (e2) {
@@ -40,17 +53,24 @@ export default function Login() {
         </div>
         <form onSubmit={submit} className="space-y-4 rounded-2xl border border-stone-200 bg-white p-6 shadow-card">
           <ErrorNote message={err} />
+          {needsSetup && (
+            <Field label="Your name" required>
+              <Input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" required autoFocus />
+            </Field>
+          )}
           <Field label="Username" required>
-            <Input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" required autoFocus />
+            <Input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" required autoFocus={!needsSetup} minLength={needsSetup ? 3 : undefined} maxLength={needsSetup ? 50 : undefined} />
           </Field>
           <Field label="Password" required>
-            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
+            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={needsSetup ? "new-password" : "current-password"} required minLength={needsSetup ? 8 : undefined} />
           </Field>
-          <Button type="submit" loading={loading} className="w-full" size="lg">
-            Sign in
+          <Button type="submit" loading={loading || checkingSetup} disabled={checkingSetup} className="w-full" size="lg">
+            {needsSetup ? "Create owner account" : "Sign in"}
           </Button>
         </form>
-        <p className="mt-4 text-center text-xs text-ink-mute">Only the owner has an account. Ask your developer to create one if needed.</p>
+        <p className="mt-4 text-center text-xs text-ink-mute">
+          {needsSetup ? "This creates the only owner account for this business." : "Only the owner has an account. Ask your developer to create one if needed."}
+        </p>
       </div>
     </div>
   );
